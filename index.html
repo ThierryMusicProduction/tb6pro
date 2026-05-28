@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>TB-6-Pro Advanced Drum Settings</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #eef2f3; color: #333; }
+        .box { background: white; padding: 25px; border-radius: 12px; max-width: 340px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        input[type="number"] { width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #ccc; text-align: center; }
+        input[type="range"] { width: 150px; }
+        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        button:hover { background: #218838; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+        h3 { margin-top: 0; text-align: center; color: #111; }
+        label { font-weight: 500; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h3>TB-6-Pro Drum Config</h3>
+        <button onclick="connect()">1. CONNECT TO CONTROLLER</button>
+        <hr>
+        <div class="row">
+            <label>Sensitivity Offset (0-20):</label>
+            <input type="range" min="0" max="20" value="0" onchange="sendCC(100, this.value)">
+        </div>
+        <hr>
+        <div class="row"><label>Pad 1 MIDI Note:</label><input type="number" value="36" onchange="sendCC(101, this.value)"></div>
+        <div class="row"><label>Pad 2 MIDI Note:</label><input type="number" value="38" onchange="sendCC(102, this.value)"></div>
+        <div class="row"><label>Pad 3 MIDI Note:</label><input type="number" value="40" onchange="sendCC(103, this.value)"></div>
+        <div class="row"><label>Pad 4 MIDI Note:</label><input type="number" value="41" onchange="sendCC(104, this.value)"></div>
+        <div class="row"><label>Pad 5 MIDI Note:</label><input type="number" value="43" onchange="sendCC(105, this.value)"></div>
+        <div class="row"><label>Pad 6 MIDI Note:</label><input type="number" value="45" onchange="sendCC(106, this.value)"></div>
+    </div>
+
+    <script>
+        let midiOut = null;
+        async function connect() {
+            try {
+                const midi = await navigator.requestMIDIAccess({ sysex: false });
+                const outputs = Array.from(midi.outputs.values());
+                // Locate your custom pro controller profile name
+                midiOut = outputs.find(o => o.name.includes("TB-6-Pro") || o.name.includes("XIAO"));
+                if (midiOut) { 
+                    alert("Successfully connected to: " + midiOut.name); 
+                } else { 
+                    alert("Controller not found. Make sure 'TB-6-Pro' is paired in your system settings!"); 
+                }
+            } catch (e) { 
+                alert("MIDI Blocked. Ensure you are using Chrome/Edge (PC) or Bluefy Browser (iPad)."); 
+            }
+        }
+        function sendCC(cc, val) {
+            if (midiOut) { 
+                midiOut.send([0xB0, cc, val]); 
+                console.log("Sent Configuration CC " + cc + " with data: " + val);
+            }
+        }
+    </script>
+</body>
+</html>
