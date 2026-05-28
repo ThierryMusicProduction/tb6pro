@@ -8,8 +8,8 @@
         .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         input[type="number"] { width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #ccc; text-align: center; }
         input[type="range"] { width: 150px; }
-        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; }
-        button:hover { background: #218838; }
+        button { width: 100%; padding: 12px; background: #007AFF; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        button:hover { background: #0056b3; }
         hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
         h3 { margin-top: 0; text-align: center; color: #111; }
         label { font-weight: 500; font-size: 14px; }
@@ -18,7 +18,7 @@
 <body>
     <div class="box">
         <h3>TB-6-Pro Drum Config</h3>
-        <button onclick="connect()">1. CONNECT TO CONTROLLER</button>
+        <button onclick="connect()">1. INITIALIZE VIRTUAL MIDI</button>
         <hr>
         <div class="row">
             <label>Sensitivity Offset (0-20):</label>
@@ -34,80 +34,37 @@
     </div>
 
     <script>
-        let midiOut = null;
-        let bleCharacteristic = null; 
+        let midiOutputs = [];
 
         async function connect() {
-            // Check for standard Web MIDI (Chrome/Edge on PC)
+            // This works universally across Chrome PC and Bluefy on iPad
             if (navigator.requestMIDIAccess) {
                 try {
                     const midi = await navigator.requestMIDIAccess({ sysex: false });
-                    const outputs = Array.from(midi.outputs.values());
-                    midiOut = outputs.find(o => o.name.includes("TB-6-Pro") || o.name.includes("XIAO"));
-                    if (midiOut) { 
-                        alert("Successfully connected via Web MIDI to: " + midiOut.name); 
-                        return;
+                    midiOutputs = Array.from(midi.outputs.values());
+                    
+                    if (midiOutputs.length > 0) {
+                        alert("Virtual MIDI initialized! Sending to all available ports.");
+                    } else {
+                        alert("No MIDI outputs found. Please make sure midimittr or Loopy Pro is running.");
                     }
                 } catch (e) {
-                    console.log("Web MIDI ignored, testing for Web Bluetooth...");
+                    alert("MIDI Access denied: " + e.message);
                 }
+            } else {
+                alert("This browser does not support Web MIDI.");
             }
-
-            // Fallback for Bluefy Browser on iPad (Real Web Bluetooth Auto-Discovery)
-            if (navigator.bluetooth) {
-                try {
-                    alert("Opening Bluefy Bluetooth Manager... Please select your Seeed Studio XIAO / TB-6-Pro.");
-                    
-                    const midiServiceUUID = '03b80ba0-f010-11e2-b778-0800200c9a66'; // Universal MIDI Service
-
-                    const device = await navigator.bluetooth.requestDevice({
-                        acceptAllDevices: true,
-                        optionalServices: [midiServiceUUID] // Let us open the MIDI service
-                    });
-
-                    const server = await device.gatt.connect();
-                    const service = await server.getPrimaryService(midiServiceUUID);
-                    
-                    // FIXED: Instead of using a hardcoded string, we ask the board to give us its primary characteristic channel
-                    const characteristics = await service.getCharacteristics();
-                    if (characteristics.length > 0) {
-                        bleCharacteristic = characteristics[0]; // Auto-lock onto the active data channel
-                    } else {
-                        throw new Error("No MIDI characteristics found on your board.");
-                    }
-
-                    alert("Connected successfully over Bluetooth! Data pipeline is active.");
-                    
-                    // Route your slider data directly into the Bluetooth antenna
-                    midiOut = {
-                        send: async function(midiBytes) {
-                            try {
-                                if (bleCharacteristic) {
-                                    // Wrap standard MIDI data into a BLE 1.0 Packet structure
-                                    let blePacket = new Uint8Array([0x80, 0x80, midiBytes[0], midiBytes[1], midiBytes[2]]);
-                                    await bleCharacteristic.writeValueWithoutResponse(blePacket);
-                                }
-                            } catch (err) {
-                                console.log("Bluetooth packet send error: ", err);
-                            }
-                        }
-                    };
-                    return;
-                } catch (error) {
-                    alert("Bluetooth pairing failed: " + error.message);
-                    return;
-                }
-            }
-
-            alert("Connection error: This browser cannot find any MIDI or Bluetooth engines.");
         }
 
         function sendCC(cc, val) {
-            if (midiOut) {
-                midiOut.send([0xB0, cc, parseInt(val)]); 
-                console.log("Sent Configuration CC " + cc + " with data: " + val);
+            if (midiOutputs.length > 0) {
+                // Broadcast standard MIDI CC data to every connected port instantly
+                midiOutputs.forEach(output => {
+                    output.send([0xB0, cc, parseInt(val)]);
+                });
+                console.log("Broadcast CC " + cc + " value: " + val);
             } else {
-                alert("Please click '1. CONNECT TO CONTROLLER' first!");
+                alert("Please click '1. INITIALIZE VIRTUAL MIDI' first!");
             }
         }
     </script>
