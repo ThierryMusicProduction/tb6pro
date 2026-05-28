@@ -35,7 +35,7 @@
 
     <script>
         let midiOut = null;
-        let bleCharacteristic = null; // Store the actual Bluetooth pipeline here
+        let bleCharacteristic = null; 
 
         async function connect() {
             // Check for standard Web MIDI (Chrome/Edge on PC)
@@ -53,34 +53,42 @@
                 }
             }
 
-            // Fallback for Bluefy Browser on iPad (Real Web Bluetooth Engine)
+            // Fallback for Bluefy Browser on iPad (Real Web Bluetooth Auto-Discovery)
             if (navigator.bluetooth) {
                 try {
                     alert("Opening Bluefy Bluetooth Manager... Please select your Seeed Studio XIAO / TB-6-Pro.");
                     
-                    const midiServiceUUID = '03b80ba0-f010-11e2-b778-0800200c9a66';
-                    const midiCharacteristicUUID = '7772e5db-3868-4112-a1a9-f2669d106bf3';
+                    const midiServiceUUID = '03b80ba0-f010-11e2-b778-0800200c9a66'; // Universal MIDI Service
 
                     const device = await navigator.bluetooth.requestDevice({
                         acceptAllDevices: true,
-                        optionalServices: [midiServiceUUID]
+                        optionalServices: [midiServiceUUID] // Let us open the MIDI service
                     });
 
                     const server = await device.gatt.connect();
                     const service = await server.getPrimaryService(midiServiceUUID);
-                    bleCharacteristic = await service.getCharacteristic(midiCharacteristicUUID);
+                    
+                    // FIXED: Instead of using a hardcoded string, we ask the board to give us its primary characteristic channel
+                    const characteristics = await service.getCharacteristics();
+                    if (characteristics.length > 0) {
+                        bleCharacteristic = characteristics[0]; // Auto-lock onto the active data channel
+                    } else {
+                        throw new Error("No MIDI characteristics found on your board.");
+                    }
 
                     alert("Connected successfully over Bluetooth! Data pipeline is active.");
                     
-                    // Assign a real functional sender mechanism to midiOut
+                    // Route your slider data directly into the Bluetooth antenna
                     midiOut = {
                         send: async function(midiBytes) {
                             try {
-                                // BLE MIDI packets require a 2-byte header encapsulation
-                                let blePacket = new Uint8Array([0x80, 0x80, midiBytes[0], midiBytes[1], midiBytes[2]]);
-                                await bleCharacteristic.writeValueWithoutResponse(blePacket);
+                                if (bleCharacteristic) {
+                                    // Wrap standard MIDI data into a BLE 1.0 Packet structure
+                                    let blePacket = new Uint8Array([0x80, 0x80, midiBytes[0], midiBytes[1], midiBytes[2]]);
+                                    await bleCharacteristic.writeValueWithoutResponse(blePacket);
+                                }
                             } catch (err) {
-                                console.log("Bluetooth transmit failure: ", err);
+                                console.log("Bluetooth packet send error: ", err);
                             }
                         }
                     };
@@ -95,7 +103,7 @@
         }
 
         function sendCC(cc, val) {
-            if (midiOut) { 
+            if (midiOut) {
                 midiOut.send([0xB0, cc, parseInt(val)]); 
                 console.log("Sent Configuration CC " + cc + " with data: " + val);
             } else {
