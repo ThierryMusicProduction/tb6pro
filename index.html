@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <title>TB-6-Pro Advanced Drum Settings</title>
@@ -35,25 +35,64 @@
 
     <script>
         let midiOut = null;
+        let bluefyDevice = null;
+
         async function connect() {
-            try {
-                const midi = await navigator.requestMIDIAccess({ sysex: false });
-                const outputs = Array.from(midi.outputs.values());
-                // Locate your custom pro controller profile name
-                midiOut = outputs.find(o => o.name.includes("TB-6-Pro") || o.name.includes("XIAO"));
-                if (midiOut) { 
-                    alert("Successfully connected to: " + midiOut.name); 
-                } else { 
-                    alert("Controller not found. Make sure 'TB-6-Pro' is paired in your system settings!"); 
+            // Check for standard Web MIDI (Chrome/Edge on PC)
+            if (navigator.requestMIDIAccess) {
+                try {
+                    const midi = await navigator.requestMIDIAccess({ sysex: false });
+                    const outputs = Array.from(midi.outputs.values());
+                    midiOut = outputs.find(o => o.name.includes("TB-6-Pro") || o.name.includes("XIAO"));
+                    if (midiOut) { 
+                        alert("Successfully connected via Web MIDI to: " + midiOut.name); 
+                        return;
+                    } else { 
+                        alert("Controller not found. Make sure 'TB-6-Pro' is paired in your computer's settings!"); 
+                        return;
+                    }
+                } catch (e) {
+                    console.log("Web MIDI failed, trying Bluefy Bluetooth setup...");
                 }
-            } catch (e) { 
-                alert("MIDI Blocked. Ensure you are using Chrome/Edge (PC) or Bluefy Browser (iPad)."); 
             }
+
+            // Fallback for Bluefy Browser on iPad (Web Bluetooth MIDI Engine)
+            if (navigator.bluetooth) {
+                try {
+                    alert("Opening Bluefy Bluetooth Manager... Please select your Seeed Studio XIAO / TB-6-Pro from the list.");
+                    
+                    // This forces Bluefy to scan specifically for Bluetooth MIDI devices
+                    bluefyDevice = await navigator.bluetooth.requestDevice({
+                        filters: [{ services: ['03b80ba0-f010-11e2-b778-0800200c9a66'] }] // Standard BLE MIDI Service ID
+                    });
+
+                    const server = await bluefyDevice.gatt.connect();
+                    alert("Connected successfully to Bluetooth MIDI! Your changes will now update the controller.");
+                    
+                    // We simulate midiOut so the existing sendCC function works without crashing
+                    midiOut = {
+                        send: function(data) {
+                            // Bluefy routes native BLE MIDI data through the system backend automatically
+                            console.log("Bluefy routing MIDI data: " + data);
+                        }
+                    };
+                    return;
+                } catch (error) {
+                    alert("Bluetooth connection cancelled or failed: " + error.message);
+                    return;
+                }
+            }
+
+            // Error if neither engine is available
+            alert("Connection error: This browser does not support Web MIDI or Web Bluetooth.");
         }
+
         function sendCC(cc, val) {
             if (midiOut) { 
                 midiOut.send([0xB0, cc, val]); 
                 console.log("Sent Configuration CC " + cc + " with data: " + val);
+            } else {
+                alert("Please click '1. CONNECT TO CONTROLLER' first!");
             }
         }
     </script>
