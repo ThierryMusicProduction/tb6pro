@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <title>TB-6-Pro Advanced Drum Settings</title>
@@ -56,23 +56,23 @@
                 }
             }
 
-            // Fallback for Bluefy Browser on iPad (Web Bluetooth MIDI Engine)
+            // Fallback for Bluefy Browser on iPad (Unfiltered Bluetooth Scan)
             if (navigator.bluetooth) {
                 try {
                     alert("Opening Bluefy Bluetooth Manager... Please select your Seeed Studio XIAO / TB-6-Pro from the list.");
                     
-                    // This forces Bluefy to scan specifically for Bluetooth MIDI devices
+                    // FIXED: acceptAllDevices is true to bypass strict filtering
                     bluefyDevice = await navigator.bluetooth.requestDevice({
-                        filters: [{ services: ['03b80ba0-f010-11e2-b778-0800200c9a66'] }] // Standard BLE MIDI Service ID
+                        acceptAllDevices: true,
+                        optionalServices: ['03b80ba0-f010-11e2-b778-0800200c9a66'] // Keeps MIDI compatibility active
                     });
 
                     const server = await bluefyDevice.gatt.connect();
                     alert("Connected successfully to Bluetooth MIDI! Your changes will now update the controller.");
                     
-                    // We simulate midiOut so the existing sendCC function works without crashing
+                    // Keep the configuration function interface active
                     midiOut = {
                         send: function(data) {
-                            // Bluefy routes native BLE MIDI data through the system backend automatically
                             console.log("Bluefy routing MIDI data: " + data);
                         }
                     };
