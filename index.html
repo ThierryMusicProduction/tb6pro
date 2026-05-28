@@ -18,7 +18,7 @@
 <body>
     <div class="box">
         <h3>TB-6-Pro Drum Config</h3>
-        <button onclick="connect()">1. INITIALIZE VIRTUAL MIDI</button>
+        <button onclick="connect()">1. ACTIVATE WEBBLÉ MIDI</button>
         <hr>
         <div class="row">
             <label>Sensitivity Offset (0-20):</label>
@@ -34,37 +34,36 @@
     </div>
 
     <script>
-        let midiOutputs = [];
+        let midiOut = null;
 
         async function connect() {
-            // This works universally across Chrome PC and Bluefy on iPad
             if (navigator.requestMIDIAccess) {
                 try {
                     const midi = await navigator.requestMIDIAccess({ sysex: false });
-                    midiOutputs = Array.from(midi.outputs.values());
+                    const outputs = Array.from(midi.outputs.values());
                     
-                    if (midiOutputs.length > 0) {
-                        alert("Virtual MIDI initialized! Sending to all available ports.");
+                    // WebBLE creates a universal port wrapper or auto-targets active Bluetooth lines
+                    midiOut = outputs.find(o => o.name.includes("TB-6-Pro") || o.name.includes("XIAO")) || outputs[0];
+                    
+                    if (midiOut) {
+                        alert("Connected to WebBLE Output: " + midiOut.name);
                     } else {
-                        alert("No MIDI outputs found. Please make sure midimittr or Loopy Pro is running.");
+                        alert("MIDI framework ready, but no destination device found. Open WebBLE's Bluetooth menu.");
                     }
                 } catch (e) {
                     alert("MIDI Access denied: " + e.message);
                 }
             } else {
-                alert("This browser does not support Web MIDI.");
+                alert("Web MIDI is completely missing in this browser environment.");
             }
         }
 
         function sendCC(cc, val) {
-            if (midiOutputs.length > 0) {
-                // Broadcast standard MIDI CC data to every connected port instantly
-                midiOutputs.forEach(output => {
-                    output.send([0xB0, cc, parseInt(val)]);
-                });
-                console.log("Broadcast CC " + cc + " value: " + val);
+            if (midiOut) {
+                midiOut.send([0xB0, cc, parseInt(val)]);
+                console.log("Sent CC " + cc + " value: " + val);
             } else {
-                alert("Please click '1. INITIALIZE VIRTUAL MIDI' first!");
+                alert("Please click '1. ACTIVATE WEBBLÉ MIDI' first!");
             }
         }
     </script>
