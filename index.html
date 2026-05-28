@@ -35,7 +35,7 @@
 
     <script>
         let midiOut = null;
-        let bluefyDevice = null;
+        let bleCharacteristic = null; // Store the actual Bluetooth pipeline here
 
         async function connect() {
             // Check for standard Web MIDI (Chrome/Edge on PC)
@@ -47,49 +47,56 @@
                     if (midiOut) { 
                         alert("Successfully connected via Web MIDI to: " + midiOut.name); 
                         return;
-                    } else { 
-                        alert("Controller not found. Make sure 'TB-6-Pro' is paired in your computer's settings!"); 
-                        return;
                     }
                 } catch (e) {
-                    console.log("Web MIDI failed, trying Bluefy Bluetooth setup...");
+                    console.log("Web MIDI ignored, testing for Web Bluetooth...");
                 }
             }
 
-            // Fallback for Bluefy Browser on iPad (Unfiltered Bluetooth Scan)
+            // Fallback for Bluefy Browser on iPad (Real Web Bluetooth Engine)
             if (navigator.bluetooth) {
                 try {
-                    alert("Opening Bluefy Bluetooth Manager... Please select your Seeed Studio XIAO / TB-6-Pro from the list.");
+                    alert("Opening Bluefy Bluetooth Manager... Please select your Seeed Studio XIAO / TB-6-Pro.");
                     
-                    // FIXED: acceptAllDevices is true to bypass strict filtering
-                    bluefyDevice = await navigator.bluetooth.requestDevice({
+                    const midiServiceUUID = '03b80ba0-f010-11e2-b778-0800200c9a66';
+                    const midiCharacteristicUUID = '7772e5db-3868-4112-a1a9-f2669d106bf3';
+
+                    const device = await navigator.bluetooth.requestDevice({
                         acceptAllDevices: true,
-                        optionalServices: ['03b80ba0-f010-11e2-b778-0800200c9a66'] // Keeps MIDI compatibility active
+                        optionalServices: [midiServiceUUID]
                     });
 
-                    const server = await bluefyDevice.gatt.connect();
-                    alert("Connected successfully to Bluetooth MIDI! Your changes will now update the controller.");
+                    const server = await device.gatt.connect();
+                    const service = await server.getPrimaryService(midiServiceUUID);
+                    bleCharacteristic = await service.getCharacteristic(midiCharacteristicUUID);
+
+                    alert("Connected successfully over Bluetooth! Data pipeline is active.");
                     
-                    // Keep the configuration function interface active
+                    // Assign a real functional sender mechanism to midiOut
                     midiOut = {
-                        send: function(data) {
-                            console.log("Bluefy routing MIDI data: " + data);
+                        send: async function(midiBytes) {
+                            try {
+                                // BLE MIDI packets require a 2-byte header encapsulation
+                                let blePacket = new Uint8Array([0x80, 0x80, midiBytes[0], midiBytes[1], midiBytes[2]]);
+                                await bleCharacteristic.writeValueWithoutResponse(blePacket);
+                            } catch (err) {
+                                console.log("Bluetooth transmit failure: ", err);
+                            }
                         }
                     };
                     return;
                 } catch (error) {
-                    alert("Bluetooth connection cancelled or failed: " + error.message);
+                    alert("Bluetooth pairing failed: " + error.message);
                     return;
                 }
             }
 
-            // Error if neither engine is available
-            alert("Connection error: This browser does not support Web MIDI or Web Bluetooth.");
+            alert("Connection error: This browser cannot find any MIDI or Bluetooth engines.");
         }
 
         function sendCC(cc, val) {
             if (midiOut) { 
-                midiOut.send([0xB0, cc, val]); 
+                midiOut.send([0xB0, cc, parseInt(val)]); 
                 console.log("Sent Configuration CC " + cc + " with data: " + val);
             } else {
                 alert("Please click '1. CONNECT TO CONTROLLER' first!");
